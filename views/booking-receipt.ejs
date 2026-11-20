@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="vi"><head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Phiếu <%= booking.publicCode || booking._id %> | Sân Thể Thao</title>
+  <title>Phiếu <%= booking.publicCode || booking._id %> | SanXanh</title>
   <link rel="stylesheet" href="/assets/css/app.css"><link rel="stylesheet" href="/assets/css/demo.css"><link rel="stylesheet" href="/assets/css/booking.css">
   <script src="/assets/js/receipt.js" defer></script>
   <link rel="stylesheet" href="/assets/css/design-system.css">
@@ -11,11 +11,11 @@
   <% const facility = booking.facility || booking.court?.facility; const accessToken = typeof token === 'string' ? token : ''; const query = accessToken ? '?token=' + encodeURIComponent(accessToken) : ''; const owned = currentUser && booking.user && String(booking.user._id || booking.user) === String(currentUser._id); %>
   <main class="booking-receipt-wrap">
     <div class="booking-receipt-actions no-print">
-      <a href="<%= currentUser ? '/my-bookings' : '/courts' %>">← <%= currentUser ? 'Đơn của tôi' : 'Xem sân' %></a>
+      <%- include('partials/back-link', { href: currentUser ? '/my-bookings' : '/courts', label: currentUser ? 'Đơn của tôi' : 'Xem sân' }) %>
       <button type="button" class="demo-button" data-print-receipt>In / Lưu PDF</button>
     </div>
     <article class="demo-card booking-receipt" aria-labelledby="receipt-title">
-      <p class="booking-eyebrow">SÂN THỂ THAO</p><h1 id="receipt-title">Phiếu thông tin đặt sân</h1>
+      <p class="booking-eyebrow">SANXANH</p><h1 id="receipt-title">Phiếu thông tin đặt sân</h1>
       <p class="booking-code">Mã đơn: <strong><%= booking.publicCode || booking._id %></strong></p>
       <p><span class="booking-badge"><%= statusLabel(booking.status) %></span></p>
       <%- include('partials/payment-review-notice', { reviewStatus }) %>
@@ -28,7 +28,7 @@
         <div><dt>Người chơi</dt><dd><%= booking.guestName || currentUser?.fullName || 'Đang cập nhật' %></dd></div>
         <div><dt>SĐT người chơi</dt><dd><%= booking.guestPhone || 'Chưa cập nhật' %></dd></div>
         <div><dt>Cơ sở</dt><dd><%= facility?.name || 'Cơ sở đang cập nhật' %></dd></div>
-        <div><dt>Địa chỉ</dt><dd><%= facility?.address || 'Đang cập nhật' %></dd></div>
+        <div><dt>Địa chỉ</dt><dd><%= facility?.address || 'Đang cập nhật' %> <%- include('partials/maps-link', { facilityName: facility?.name, facilityAddress: facility?.address, extraClass: 'no-print' }) %></dd></div>
         <div><dt>Sân</dt><dd><%= booking.court?.name || 'Sân đang cập nhật' %></dd></div>
         <div><dt>Ngày chơi</dt><dd><%= formatDate(booking.date) %></dd></div>
         <div><dt>Thanh toán</dt><dd><%= paymentLabel(booking.paymentStatus) %></dd></div>
@@ -41,15 +41,18 @@
       <%- include('partials/extra-summary', { lines: booking.extras || [] }) %>
       <p class="booking-total"><span>Tổng giá đơn</span><strong><%= formatMoney(booking.totalPrice) %></strong></p>
       <p><strong>Điện thoại cơ sở:</strong> <% if (facility?.phone) { %><a href="tel:<%= facility.phone %>"><%= facility.phone %></a><% } else { %>Chưa có số liên hệ.<% } %></p>
-      <p class="demo-muted"><%= booking.user ? 'Khách có tài khoản có thể gửi yêu cầu hủy/đổi; chủ sân sẽ xem xét và xử lý.' : 'Khách vãng lai cần gọi chủ sân khi muốn hủy/đổi. Mã đơn giúp tra cứu, không tự cấp quyền hủy đơn.' %></p>
+      <p class="demo-muted"><%= booking.user ? 'Cần gửi yêu cầu trước ô đầu tiên ít nhất 36 giờ. Khách có tài khoản có thể gửi yêu cầu hủy/đổi; chủ sân sẽ xem xét và xử lý.' : 'Khách vãng lai cần gọi chủ sân khi muốn hủy/đổi. Mã đơn giúp tra cứu, không tự cấp quyền hủy đơn.' %></p>
       <p class="booking-receipt-footer">Chủ sân đối chiếu đơn trên hệ thống. Phiếu hoặc ảnh chụp không thay thế việc xác minh tiền.</p>
     </article>
     <div class="demo-actions no-print"><% if (owned && booking.status === 'CONFIRMED' && !booking.checkedInAt) { %><a class="demo-button" href="/groups/new">Rủ bạn chia tiền sân</a><% } %>
-      <% if (owned && !booking.checkedInAt && ['CONFIRMED', 'LEGACY_RESERVED'].includes(booking.status) && booking.slots?.length && booking.slots.every(slot => new Date(slot.startAt).getTime() > Date.now())) { %>
-        <a class="demo-button demo-button-secondary" href="/bookings/<%= booking._id %>/request">Gửi yêu cầu hủy / đổi</a>
+      <% if (owned && !booking.checkedInAt && ['CONFIRMED', 'LEGACY_RESERVED'].includes(booking.status) && withinRequestWindow(booking)) { %>
+        <a class="demo-button demo-button-secondary" href="/bookings/<%= booking._id %>/request?type=CHANGE">Đổi giờ / sân</a>
+        <a class="demo-button demo-button-secondary" href="/bookings/<%= booking._id %>/request?type=CANCEL">Gửi yêu cầu hủy đơn</a>
       <% } %>
       <% if (booking.status === 'HOLD') { %><a class="demo-button" href="/bookings/<%= booking._id %>/checkout<%= query %>">Tiếp tục xem giữ chỗ</a><% } %>
     </div>
     <p class="demo-muted no-print">Chọn “In / Lưu PDF”, rồi chọn “Lưu dưới dạng PDF” trong hộp thoại của trình duyệt.</p>
   </main>
-</div></body></html>
+</div>
+  <%- include('partials/footer') %>
+</body></html>

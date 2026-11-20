@@ -69,6 +69,11 @@ function refundValue(value, maximum) {
   if (!Number.isSafeInteger(result) || result < 0 || result > maximum) fail(400, 'Số tiền hoàn vượt quá khoản được phép ghi nhận.');
   return result;
 }
+export function withinRequestWindow(booking, now = Date.now()) {
+  return Boolean(booking.slots?.length) && booking.slots.every(slot =>
+    new Date(slot.startAt).getTime() - Number(now) >= 36 * 3600000);
+}
+
 function canModify(booking, now) {
   if (booking.checkedInAt) fail(409, 'Đơn đã check-in, không thể hủy hoặc đổi lịch.');
   if (!['CONFIRMED', 'LEGACY_RESERVED'].includes(booking.status)) fail(409, 'Đơn chưa xác nhận, đã hết hạn hoặc đã hủy.');
@@ -243,6 +248,25 @@ export async function getBookingForViewer(id, { user, token } = {}) {
   return result;
 }
 
+export async function claimGuestHold(id, token, user) {
+  objectId(id, 'Mã đơn');
+  return transaction(async session => {
+    const booking = await Booking.findById(id).select('+guestTokenHash').session(session);
+    if (!booking || booking.user || !tokenMatches(token, booking.guestTokenHash))
+      fail(403, 'Link riêng không hợp lệ hoặc đơn đã thuộc tài khoản.');
+    if (booking.status === 'EXPIRED') return false;
+    if (booking.status !== 'HOLD') fail(409, 'Đơn không còn chờ thanh toán.');
+    if (Number(effectiveHoldExpiresAt(booking)) <= Date.now()) {
+      await expireBooking(booking, session);
+      return false;
+    }
+    booking.user = user._id;
+    booking.guestTokenHash = undefined;
+    await booking.save({ session });
+    return true;
+  });
+}
+
 export async function simulatePayment(id, { user, token } = {}) {
   if (!getPaymentConfig().demoMode) fail(403, 'Mô phỏng thanh toán chỉ mở trong chế độ demo.');
   await getBookingForViewer(id, { user, token });
@@ -287,6 +311,28 @@ export async function simulatePayment(id, { user, token } = {}) {
   return getBookingForViewer(id, { user, token });
 }
 
+export async function cancelHold(id, { user, token } = {}) {
+  await getBookingForViewer(id, { user, token });
+  await transaction(async session => {
+    const booking = await Booking.findById(id).session(session);
+    if (!booking) fail(404, 'Không tìm thấy đơn đặt sân.');
+    if (booking.status === 'CANCELLED' || booking.status === 'EXPIRED') return;
+    if (booking.status !== 'HOLD' || booking.paymentStatus !== 'UNPAID') {
+      fail(409, 'Đơn đã thanh toán không thể tự hủy nhanh; hãy gửi yêu cầu hủy để chủ sân xét duyệt.');
+    }
+    booking.status = 'CANCELLED';
+    booking.holdExpiresAt = undefined;
+    await booking.save({ session });
+    await SlotLock.deleteMany({ booking: booking._id }, { session });
+    await Payment.updateMany(
+      { booking: booking._id, type: 'INITIAL_INTENT', intentStatus: { $in: ['CREATING', 'PENDING', 'UNKNOWN'] } },
+      { $set: { intentStatus: 'EXPIRED', failureCode: 'HOLD_CANCELLED' } },
+      { session }
+    );
+  });
+  return getBookingForViewer(id, { user, token });
+}
+
 export async function createChangeRequest(id, user, body = {}) {
   objectId(id, 'Mã đơn');
   if (!user?._id) fail(403, 'Đăng nhập để gửi yêu cầu hủy/đổi.');
@@ -299,6 +345,7 @@ export async function createChangeRequest(id, user, body = {}) {
     if (!booking) fail(404, 'Không tìm thấy đơn đặt sân.');
     if (!sameId(booking.user, user._id)) fail(403, 'Bạn chỉ được gửi yêu cầu cho đơn của mình.');
     canModify(booking, new Date());
+    if (!withinRequestWindow(booking)) fail(409, 'Chỉ nhận yêu cầu hủy/đổi khi còn ít nhất 36 giờ trước ô đầu tiên.');
     // Viết lên đơn để việc tạo yêu cầu đồng thời với hủy/đổi phải tranh chấp cùng document.
     await Booking.updateOne({ _id: booking._id }, { $inc: { __v: 1 } }, { session });
     const details = { booking: booking._id, user: user._id, type, reason, status: 'PENDING', source: 'CUSTOMER' };

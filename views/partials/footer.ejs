@@ -1,0 +1,71 @@
+<footer class="site-footer no-print" role="contentinfo">
+  <div class="site-footer-inner">
+    <div class="site-footer-grid">
+      <div class="site-footer-brand">
+        <a class="site-footer-logo" href="/" aria-label="SanXanh - Trang chủ">
+          <span class="site-footer-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32" fill="none"><rect class="brand-court" x="5.5" y="6.5" width="21" height="19" rx="4"/><path class="brand-lines" d="M16 6.5v19M5.5 16h21M10.5 6.5v19M21.5 6.5v19"/><path class="brand-arc" d="M8.5 22.5C11.5 13 18.5 9.5 24 10.5"/><circle class="brand-ball" cx="23.5" cy="10.5" r="2.7"/></svg>
+          </span>
+          <span>SanXanh<span class="site-footer-dot">.</span></span>
+        </a>
+        <p class="site-footer-tagline">Nền tảng đặt sân thể thao theo ô 30 phút — hiển thị lịch trống thực tế, giữ chỗ minh bạch và kết nối người chơi sân ghép.</p>
+        <div class="site-footer-badges">
+          <span>Việt Nam (UTC+7)</span>
+          <span>Ô 30 phút linh hoạt</span>
+          <span>Phiếu đặt sân PDF</span>
+        </div>
+      </div>
+
+      <div class="site-footer-col">
+        <h2>Khám phá</h2>
+        <ul>
+          <li><a href="/">Trang chủ</a></li>
+          <li><a href="/facilities">Danh sách cơ sở</a></li>
+          <li><a href="/courts">Thuê sân riêng</a></li>
+          <li><a href="/groups">Sân ghép tìm bạn</a></li>
+          <li><a href="/#gioi-thieu">Hướng dẫn đặt sân</a></li>
+        </ul>
+      </div>
+
+      <div class="site-footer-col">
+        <h2>Tài khoản & Đối tác</h2>
+        <ul>
+          <% if (typeof currentUser !== 'undefined' && currentUser) { %>
+            <li><a href="/account">Thông tin tài khoản</a></li>
+            <li><a href="/my-bookings">Đơn đặt của tôi</a></li>
+            <li><a href="/groups?mine=1">Buổi sân ghép của tôi</a></li>
+            <% if (currentUser.role === 'OWNER') { %>
+              <li><a href="/owner">Quản lý cơ sở</a></li>
+              <% if (currentUser.ownerStatus === 'APPROVED') { %>
+                <li><a href="/owner/calendar">Lịch điều hành sân</a></li>
+              <% } %>
+            <% } %>
+            <% if (currentUser.role === 'ADMIN') { %>
+              <li><a href="/admin">Quản trị hệ thống</a></li>
+            <% } %>
+          <% } else { %>
+            <li><a href="/login">Đăng nhập</a></li>
+            <li><a href="/register">Đăng ký khách đặt sân</a></li>
+            <li><a href="/register/owner">Đăng ký mở cơ sở / chủ sân</a></li>
+            <li><a href="/forgot-password">Quên mật khẩu</a></li>
+          <% } %>
+        </ul>
+      </div>
+
+      <div class="site-footer-col">
+        <h2>Quy định & Hỗ trợ</h2>
+        <ul class="site-footer-rules">
+          <li>Giữ chỗ tối đa 10 phút, kết thúc trước giờ bắt đầu ô đầu tiên.</li>
+          <li>Yêu cầu hủy hoặc đổi lịch gửi trước giờ chơi tối thiểu 36 giờ.</li>
+          <li>Khách vãng lai lưu đường dẫn phiếu và gọi trực tiếp số cơ sở khi cần hủy/đổi.</li>
+          <li>Chế độ thanh toán: <strong><%= typeof paymentMode !== 'undefined' && paymentMode === 'demo' ? 'Mô phỏng / Sandbox' : 'Chưa mở trực tuyến' %></strong>.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="site-footer-bottom">
+      <p>© 2026 SanXanh. Mọi quyền được bảo lưu.</p>
+      <p class="site-footer-status">Nền tảng đặt sân thể thao trực tuyến · Hỗ trợ đặt vãng lai & thành viên</p>
+    </div>
+  </div>
+</footer>

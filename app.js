@@ -1,3 +1,4 @@
+import { withinRequestWindow } from './services/booking.service.js';
 import express from 'express';
 import groupRoutes from './routes/play-group.routes.js';
 import session from 'express-session';
@@ -5,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import homeRoutes from './routes/home.routes.js';
 import facilityRoutes from './routes/facility.routes.js';
 import createAuthRoutes from './routes/auth.routes.js';
+import accountRoutes from './routes/account.routes.js';
 import courtRoutes from './routes/court.routes.js';
 import createBookingRoutes from './routes/booking.routes.js';
 import ownerRoutes from './routes/owner.routes.js';
@@ -22,10 +24,13 @@ import { createPaymentWebhookRoutes } from './routes/payment-webhook.routes.js';
 import { coverImage } from './utils/images.js';
 import { cloudImageStorage } from './services/image-storage.js';
 import createOwnerImageRoutes from './routes/owner-images.routes.js';
+import { createMailService } from './services/mail.service.js';
+import { getAntiBotConfig } from './middlewares/anti-bot.middleware.js';
 
 export default function createApp(sessionStore, {
   paymentService = createPaymentService({ getPaymentConfig }), paymentWebhookHandler,
-  paymentCheckoutEnabled = false, imageStorage = cloudImageStorage, sessionProxy
+  paymentCheckoutEnabled = false, imageStorage = cloudImageStorage, sessionProxy,
+  mailService = createMailService()
 } = {}) {
   if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32) {
     throw new Error('Hãy thêm SESSION_SECRET dài ít nhất 32 ký tự vào .env.');
@@ -34,6 +39,7 @@ export default function createApp(sessionStore, {
   getPaymentConfig();
 
   const app = express();
+  app.locals.withinRequestWindow = withinRequestWindow;
   app.set('view engine', 'ejs');
   app.set('views', fileURLToPath(new URL('./views', import.meta.url)));
   app.locals.formatMoney = formatMoney;
@@ -66,8 +72,21 @@ export default function createApp(sessionStore, {
   app.use((req, res, next) => {
     res.locals.currentUser = null;
     res.locals.csrfToken = '';
+    res.locals.navigationPath = req.path;
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    const turnstile = getAntiBotConfig().turnstileEnabled;
+    const scriptSrc = turnstile ? "'self' https://challenges.cloudflare.com" : "'self'";
+    const connectSrc = turnstile ? "'self' https://challenges.cloudflare.com" : "'self'";
+    const frameSrc = turnstile ? "frame-src https://challenges.cloudflare.com; " : '';
+    res.setHeader(
+      'Content-Security-Policy',
+      `default-src 'self'; script-src ${scriptSrc}; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src ${connectSrc}; ${frameSrc}object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`
+    );
+    if (process.env.NODE_ENV === 'production') {
+      res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
     res.setHeader('Cache-Control', 'no-store');
     next();
   });
@@ -97,7 +116,8 @@ export default function createApp(sessionStore, {
   app.use('/', createPaymentRoutes(paymentService, { checkoutEnabled: paymentCheckoutEnabled }));
   app.use('/', homeRoutes);
   app.use('/facilities', facilityRoutes);
-  app.use('/', createAuthRoutes(limits));
+  app.use('/', createAuthRoutes(limits, { mailService }));
+  app.use('/', accountRoutes);
   app.use('/courts', courtRoutes);
   app.use('/', createBookingRoutes(limits.bookings));
   app.use('/', groupRoutes(limits.bookings));
