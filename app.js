@@ -93,7 +93,11 @@ export default function createApp(sessionStore, {
   // Readiness must not create a session or read a user's identity.
   app.get('/health', health);
   if (paymentWebhookHandler) app.use(createPaymentWebhookRoutes(paymentWebhookHandler));
-  app.use('/assets', express.static(fileURLToPath(new URL('./public', import.meta.url))));
+  const publicDir = fileURLToPath(new URL('./public', import.meta.url));
+  app.get(['/favicon.ico', '/favicon.svg', '/favicon.png'], (req, res) => {
+    res.sendFile(req.path.slice(1), { root: publicDir });
+  });
+  app.use('/assets', express.static(publicDir));
   app.use(express.urlencoded({ extended: false, limit: '20kb' }));
   app.use(session({
     name: 'dat_san_sid',
